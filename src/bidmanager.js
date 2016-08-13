@@ -70,10 +70,13 @@ function getBidSetForBidder(bidder) {
 exports.addBidResponse = function (adUnitCode, bid) {
   if (bid) {
     //first lookup bid request and assign it back the bidId if it matches the adUnitCode
-    let bidRequest = getBidSetForBidder(bid.bidderCode).bids.find(bidRequest => bidRequest.placementCode === adUnitCode);
-    if(bidRequest && bidRequest.bidId) {
-      bid.adId = bidRequest.bidId;
+    if (!bid.adId) {
+      let bidRequest = getBidSetForBidder(bid.bidderCode).bids.find(bidRequest => bidRequest.placementCode === adUnitCode);
+      if (bidRequest && bidRequest.bidId) {
+        bid.adId = bidRequest.bidId;
+      }
     }
+
     Object.assign(bid, {
       requestId: getBidSetForBidder(bid.bidderCode).requestId,
       responseTimestamp: timestamp(),
@@ -83,6 +86,12 @@ exports.addBidResponse = function (adUnitCode, bid) {
       adUnitCode
     });
     bid.timeToRespond = bid.responseTimestamp - bid.requestTimestamp;
+
+    if (bid.timeToRespond > $$PREBID_GLOBAL$$.bidderTimeout) {
+      const timedOut = true;
+
+      this.executeCallback(timedOut);
+    }
 
     //emit the bidAdjustment event before bidResponse, so bid response has the adjusted bid value
     events.emit(CONSTANTS.EVENTS.BID_ADJUSTMENT, bid);
@@ -113,17 +122,11 @@ exports.addBidResponse = function (adUnitCode, bid) {
     $$PREBID_GLOBAL$$._bidsReceived.push(bid);
   }
 
-  if (bidsBackAdUnit(bid.adUnitCode)) {
+  if (bid && bid.adUnitCode && bidsBackAdUnit(bid.adUnitCode)) {
     triggerAdUnitCallbacks(bid.adUnitCode);
   }
 
   if (bidsBackAll()) {
-    this.executeCallback();
-  }
-
-  if (bid.timeToRespond > $$PREBID_GLOBAL$$.bidderTimeout) {
-
-    events.emit(CONSTANTS.EVENTS.BID_TIMEOUT, this.getTimedOutBidders());
     this.executeCallback();
   }
 };
@@ -152,7 +155,7 @@ function getKeyValueTargetingPairs(bidderCode, custBidObj) {
             val: function (bidResponse) {
               if (_granularity === CONSTANTS.GRANULARITY_OPTIONS.AUTO) {
                 return bidResponse.pbAg;
-              } else  if (_granularity === CONSTANTS.GRANULARITY_OPTIONS.DENSE) {
+              } else if (_granularity === CONSTANTS.GRANULARITY_OPTIONS.DENSE) {
                 return bidResponse.pbDg;
               } else if (_granularity === CONSTANTS.GRANULARITY_OPTIONS.LOW) {
                 return bidResponse.pbLg;
@@ -236,16 +239,28 @@ exports.registerDefaultBidderSetting = function (bidderCode, defaultSetting) {
   defaultBidderSettingsMap[bidderCode] = defaultSetting;
 };
 
-exports.executeCallback = function () {
+exports.executeCallback = function (timedOut) {
   if (externalCallbackArr.called !== true) {
     processCallbacks(externalCallbackArr);
     externalCallbackArr.called = true;
+
+    if (timedOut) {
+      const timedOutBidders = this.getTimedOutBidders();
+
+      if (timedOutBidders.length) {
+        events.emit(CONSTANTS.EVENTS.BID_TIMEOUT, timedOutBidders);
+      }
+    }
   }
 
   //execute one time callback
   if (externalOneTimeCallback) {
-    processCallbacks([externalOneTimeCallback]);
-    externalOneTimeCallback = null;
+    try {
+      processCallbacks([externalOneTimeCallback]);
+    }
+    finally {
+      externalOneTimeCallback = null;
+    }
   }
 
   $$PREBID_GLOBAL$$.clearAuction();

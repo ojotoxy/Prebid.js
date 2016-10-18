@@ -2,8 +2,6 @@
 
 import Adapter from '../../../src/adapters/underdogmedia';
 import bidManager from '../../../src/bidmanager';
-import {parse as parseURL} from 'url';
-import {parse as parseQuery} from 'qs';
 import {expect} from 'chai';
 
 describe('underdog media adapter test', () => {
@@ -42,19 +40,8 @@ describe('underdog media adapter test', () => {
 
         }
       };
-    },
-
-    BidRequestArray: function(arr){
-      return {
-        send: function(){
-          for(var i = 0; i < arr.length; i++){
-            var req = new window.udm_header_lib.BidRequest(arr[i]);
-            req.send();
-
-          }
-        }
-      };
     }
+
   };
 
   // The third bid here is an invalid site id and should return a 'no-bid'.

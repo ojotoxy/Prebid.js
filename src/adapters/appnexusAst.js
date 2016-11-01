@@ -100,17 +100,6 @@ function AppnexusAstAdapter() {
       if (type && (type !== 'banner' && type !== 'video')) {
         utils.logError(`${type} ad type not supported`);
       }
-    });
-  }
-
-  /* Check that a bid has required paramters */
-  function valid(bid) {
-    if (bid.params.placementId || bid.params.memberId && bid.params.invCode) {
-      return bid;
-    } else {
-      utils.logError('bid requires placementId or (memberId and invCode) params');
-    }
-  }
 
       tag.bidId = tag.uuid;  // bidfactory looks for bidId on requested bid
       const bid = createBid(status, tag);
